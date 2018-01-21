@@ -14,6 +14,10 @@ struct termios orig_termios;
 /*** terminal section ***/
 
 void die(const char *s) {
+  // clear the screen when exit
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+  write(STDOUT_FILENO, "\x1b[H", 3);
+
   perror(s);
   exit(1);
 }
@@ -55,7 +59,10 @@ char editor_read_key() {
 /*** output section ***/
 
 void editor_refresh_screen() {
+  // clear the screen both upper & lower (J)
   write(STDOUT_FILENO, "\x1b[2J", 4);
+  // move cursor to the top left conner (H)
+  write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
 /*** input section ***/
@@ -64,6 +71,9 @@ void editor_process_keypress() {
   char c = editor_read_key();
   switch (c) {
     case CTRL_KEY('q'):
+      // clear the screen when exit
+      write(STDOUT_FILENO, "\x1b[2J", 4);
+      write(STDOUT_FILENO, "\x1b[H", 3);
       exit(0);
       break;
   }
