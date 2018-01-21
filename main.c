@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -14,9 +15,14 @@ void enable_raw_mode() {
   tcgetattr(STDIN_FILENO, &orig_termios);
   // disable raw mode when user exit program
   atexit(disable_raw_mode);
-  // turn of echoing & canonical mode by change the forth bit to 0
+  // turn of echoing, canonical mode, disable miscellaneons flag & signal
+  // by change the forth bit to 0
   struct termios raw = orig_termios;
-  raw.c_lflag &= ~(ECHO | ICANON);
+  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  raw.c_iflag &= ~(ICRNL | IXON);
+  raw.c_oflag &= ~(OPOST);
+  raw.c_cflag |= (CS8);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
@@ -25,6 +31,13 @@ int main()
   enable_raw_mode();
 
   char c;
-  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q');
+  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
+    if (iscntrl(c)) {
+      printf("%d\r\n", c);
+    } else {
+      printf("%d ('%c')\r\n", c, c);
+    }
+  }
+
   return 0;
 }
