@@ -58,10 +58,21 @@ char editor_read_key() {
 
 /*** output section ***/
 
+void editor_draw_rows() {
+  int y;
+  for (y = 0; y < 24; y++) {
+    // draw tlides ~ to the screen
+    write(STDOUT_FILENO, "~\r\n", 3);
+  }
+}
+
 void editor_refresh_screen() {
   // clear the screen both upper & lower (J)
   write(STDOUT_FILENO, "\x1b[2J", 4);
   // move cursor to the top left conner (H)
+  write(STDOUT_FILENO, "\x1b[H", 3);
+
+  editor_draw_rows();
   write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
