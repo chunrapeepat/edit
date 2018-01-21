@@ -4,12 +4,19 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <termios.h>
+#include <sys/ioctl.h>
 
 // bitwise and with 00011111
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 // save the origin terminal flag
-struct termios orig_termios;
+struct editorConfig {
+  int screenrows;
+  int screencols;
+  struct termios orig_termios;
+};
+
+struct editorConfig E;
 
 /*** terminal section ***/
 
@@ -23,18 +30,18 @@ void die(const char *s) {
 }
 
 void disable_raw_mode() {
-  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
     die("tcsetattr");
 }
 
 void enable_raw_mode() {
-  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1)
+  if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
     die("tcgetattr");
   // disable raw mode when user exit program
   atexit(disable_raw_mode);
   // turn of echoing, canonical mode, disable miscellaneons flag & signal
   // by change the forth bit to 0
-  struct termios raw = orig_termios;
+  struct termios raw = E.orig_termios;
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   raw.c_iflag &= ~(ICRNL | IXON);
   raw.c_oflag &= ~(OPOST);
@@ -56,13 +63,47 @@ char editor_read_key() {
   return c;
 }
 
+int get_cursor_position(int *rows, int *cols) {
+  char buf[32];
+  unsigned int i = 0;
+
+  if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) return -1;
+
+  while (i < sizeof(buf) - 1) {
+    if (read(STDIN_FILENO, &buf[i], 1) != 1) break;
+    if (buf[i] == 'R') break;
+    i++;
+  }
+
+  buf[i] = '\0';
+  if (buf[0] != '\x1b' || buf[1] != '[') return -1;
+  if (sscanf(&buf[2], "%d;%d", rows, cols) != 2) return -1;
+  return -1;
+}
+
+int get_window_size(int *rows, int *cols) {
+  struct winsize ws;
+  // TIOCGWINS stand for terminal IOCtl get window size
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
+    return get_cursor_position(rows, cols);
+  } else {
+    *cols = ws.ws_col;
+    *rows = ws.ws_row;
+    return 0;
+  }
+}
+
 /*** output section ***/
 
 void editor_draw_rows() {
   int y;
-  for (y = 0; y < 24; y++) {
+  for (y = 0; y < E.screenrows; y++) {
     // draw tlides ~ to the screen
     write(STDOUT_FILENO, "~\r\n", 3);
+    if (y < E.screenrows - 1) {
+      write(STDOUT_FILENO, "\r\n", 2);
+    }
   }
 }
 
@@ -90,11 +131,17 @@ void editor_process_keypress() {
   }
 }
 
-/*** init sectin ***/
+/*** init section ***/
+
+void init_editor() {
+  // fill the rows & cols on config editor
+  if (get_window_size(&E.screenrows, &E.screencols)) die("get_window_size");
+}
 
 int main()
 {
   enable_raw_mode();
+  init_editor();
 
   while (1) {
     editor_refresh_screen();
